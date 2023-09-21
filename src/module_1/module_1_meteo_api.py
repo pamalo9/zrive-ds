@@ -1,4 +1,4 @@
-""" This is a dummy example """
+""" Thiss is a dummy example """
 
 def main():
     raise NotImplementedError
