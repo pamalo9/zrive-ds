@@ -2,6 +2,7 @@
 # Import library
 import requests
 import json
+import time
 
 # Define variables
 API_URL = "https://climate-api.open-meteo.com/v1/climate?"
@@ -15,16 +16,20 @@ VARIABLES = "temperature_2m_mean,precipitation_sum,soil_moisture_0_to_10cm_mean"
 
 # Create functions
 def call_API_aux(API):
-    data = requests.get(API)
-    if data.status_code == 200:
-        data = data.json()
-        print("data")
-
+    #Call the api
+    r = requests.get(API_URL)
+    #Check the connections
+    if r.status_code == 200:
+        print("Connected to the API")  #correct connection
     else:
-        print("ERROR")
-
-    return None
-
+        print("Number Error: " + str(r.status_code) + "\nType: " + r.text) #Error number and explanation
+    
+    #Check rate limit error and make cool off
+    for _ in range(3):
+        if r.status_code == 429:
+            print("ERROR: " + str(r.status_code) + " \nType: Max rate limit, you need to wait a bit ")
+            time.sleep(10)
+        continue
 
 def get_data_meteo_api(city):
     return None
@@ -40,7 +45,8 @@ def plot_results():
 def main():
     call_API_aux(API_URL)
     # raise NotImplementedError
-
+    
+    
 
 if __name__ == "__main__":
     main()
