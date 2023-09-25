@@ -20,35 +20,40 @@ MODELS = "CMCC_CM2_VHR4,FGOALS_f3_H,HiRAM_SIT_HR,MRI_AGCM3_2_S,EC_Earth3P_HR,MPI
 
 
 # Create functions
-def call_API_aux(url): 
-    r = requests.get(url)
-
-    # Check the connections
-    if r.status_code == 200:
-        print("Connection without errors")
-        return r.json()  # correct connection
-
-    else:
-        print(
-            "Number Error: " + str(r.status_code) + "\nType: " + r.text
-        )  # Error explanation
-
-    # Check rate limit error and make cool off(Wait 3 seconds)
-    for _ in range(3):
-        if r.status_code == 429:
-            print(
-                "ERROR: "
-                + str(r.status_code)
-                + " \nType: Max rate limit, you need to wait a bit "
-            )
-            time.sleep(10)
+def call_API(url):
+    cooloff = 1
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
             r = requests.get(url)
-        continue
-    return None
+            r.raise_for_status()  # HTTP ERRORS
+            print("Good connection")
 
+        except requests.exceptions.ConnectionError as e:
+            print("Connection error:", e)
 
+            if attempt < max_attempts - 1:
+                print(f"Trying in {cooloff} seconds")
+                time.sleep(cooloff)
+                cooloff *= 2  # double the cooloff time on each iteration
+                attempt += 1
+                continue
+            else:
+                raise
+
+        except requests.exceptions.HTTPError as e:
+            print("Error HTTP:", e)
+            if attempt < max_attempts - 1:
+                print(f"Trying in {cooloff} seconds")
+                time.sleep(cooloff)
+                cooloff *= 2
+                attempt += 1
+            else:
+                raise
+
+        return r.json()
 # Obtain data from a city from the API
-def get_data_meteo_api(city, start_date, end_date, temporal_resolution):
+def get_data_meteo_api(city, start_date, end_date):
     coordinates = COORDINATES.get(city)
 
     if coordinates:
@@ -56,21 +61,21 @@ def get_data_meteo_api(city, start_date, end_date, temporal_resolution):
         long = coordinates["longitude"]
 
         # New request to the API
-        url = f"{API_URL}latitude={lat}&longitude={long}&start_date={start_date}&end_date={end_date}&models={MODELS}&temporal_resolution={temporal_resolution}&daily={VARIABLES}"
-        return call_API_aux(url)
+        url = f"{API_URL}latitude={lat}&longitude={long}&start_date={start_date}&end_date={end_date}&models={MODELS}&daily={VARIABLES}"
+        return call_API(url)
     else:
         print("Coordinate error")
         return None
 
-
+"""
 def compute_average(data):
     return np.mean(data)
 
 
 def compute_dispersion(data):
     return np.std(data)
-
-
+"""
+"""
 # It is not working
 def plot_results(
     city,
@@ -85,27 +90,26 @@ def plot_results(
     # Create figure and axes
     fig, gp = plt.subplots()
     x = range(len(variables))
-
+"""
 
 def main():
-    # raise NotImplementedError
-    temporal_resolution = "year"
-    start_date = "1950-01-01"
+    start_date = "1951-01-01"
     end_date = "1951-12-31"
     # models = "CMCC_CM2_VHR4"
 
     # Go through each city in the COORDINATES list and call the function to take each data.
     for city in COORDINATES.keys():
-        city_data = get_data_meteo_api(city, start_date, end_date, temporal_resolution)
-
+        city_data = get_data_meteo_api(city, start_date, end_date)
+        print(city_data.keys())
+        daily_data = city_data["daily"]
+        print(f"Datos para la ciudad de {city}:")
+        print(daily_data)
         # print(city_data)
-        print("Dates of: " + city + " " + str(city_data))
+       # print("Dates of: " + city + " " + str(city_data))
 
         # I have errors in this part of the code because I can´t axcess to this variables (KeyError: 'temperature_2m_mean')
-        temperature_data = city_data["temperature_2m_mean"]
-        precipitation_data = city_data["precipitation_sum"]
-        soil_moisture_data = city_data["soil_moisture_0_to_10cm_mean"]
-
+        #I need to check later the next code lines, It is commented because of that. I am checking some things
+        """
         temperature_average = compute_average(temperature_data)
         temperature_dispersion = compute_dispersion(precipitation_data)
 
@@ -137,7 +141,7 @@ def main():
         )
         print("\n")
     # plot_results(city, temperature_average, temperature_dispersion, precipitation_average, precipitation_dispersion, soil_moisture_average, soil_moisture_dispersion)
-
+"""
 
 if __name__ == "__main__":
     main()
