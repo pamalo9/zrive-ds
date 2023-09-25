@@ -42,6 +42,7 @@ def call_API(url):
                 raise
 
         except requests.exceptions.HTTPError as e:
+            
             print("Error HTTP:", e)
             if attempt < max_attempts - 1:
                 print(f"Trying in {cooloff} seconds")
@@ -59,7 +60,7 @@ def get_data_meteo_api(city, start_date, end_date):
     if coordinates:
         lat = coordinates["latitude"]
         long = coordinates["longitude"]
-        
+
 
         # New request to the API
         url = f"{API_URL}latitude={lat}&longitude={long}&start_date={start_date}&end_date={end_date}&models={MODELS}&daily={VARIABLES}"
