@@ -42,7 +42,7 @@ def call_API(url):
                 raise
 
         except requests.exceptions.HTTPError as e:
-            
+
             print("Error HTTP:", e)
             if attempt < max_attempts - 1:
                 print(f"Trying in {cooloff} seconds")
@@ -53,6 +53,7 @@ def call_API(url):
                 raise
 
         return r.json()
+    
 # Obtain data from a city from the API
 def get_data_meteo_api(city, start_date, end_date):
     coordinates = COORDINATES.get(city)
