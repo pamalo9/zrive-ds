@@ -1,10 +1,11 @@
 """ This is a dummy example """
 # Import library
 import requests
-import json
 import time
-import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+from urllib.parse import urlencode
+from typing import Dict
 
 # Define variables
 API_URL = "https://climate-api.open-meteo.com/v1/climate?"
@@ -31,7 +32,6 @@ def call_API(url):
 
         except requests.exceptions.ConnectionError as e:
             print("Connection error:", e)
-
             if attempt < max_attempts - 1:
                 print(f"Trying in {cooloff} seconds")
                 time.sleep(cooloff)
@@ -40,9 +40,7 @@ def call_API(url):
                 continue
             else:
                 raise
-
         except requests.exceptions.HTTPError as e:
-            
             print("Error HTTP:", e)
             if attempt < max_attempts - 1:
                 print(f"Trying in {cooloff} seconds")
@@ -53,97 +51,94 @@ def call_API(url):
                 raise
 
         return r.json()
+
+
 # Obtain data from a city from the API
-def get_data_meteo_api(city, start_date, end_date):
-    coordinates = COORDINATES.get(city)
-
-    if coordinates:
-        lat = coordinates["latitude"]
-        long = coordinates["longitude"]
-
-
-        # New request to the API
-        url = f"{API_URL}latitude={lat}&longitude={long}&start_date={start_date}&end_date={end_date}&models={MODELS}&daily={VARIABLES}"
-        return call_API(url)
-    else:
-        print("Coordinate error")
-        return None
-
-"""
-def compute_average(data):
-    return np.mean(data)
+def get_data_meteo_api(city: Dict[str, float]):
+    params = {
+        "latitude": city["latitude"],
+        "longitude": city["longitude"],
+        "start_date": "1950-01-01",
+        "end_date": "2050-12-31",
+        # We consider all model
+        "models": "CMCC_CM2_VHR4,FGOALS_f3_H,HiRAM_SIT_HR,MRI_AGCM3_2_S,EC_Earth3P_HR,MPI_ESM1_2_XR,NICAM16_8S",  # noqa
+        "daily": VARIABLES,
+    }
+    # New url in the right form
+    url = API_URL + urlencode(params, safe=",")
+    return call_API(url)
 
 
-def compute_dispersion(data):
-    return np.std(data)
-"""
-"""
-# It is not working
-def plot_results(
-    city,
-    temperature_average,
-    temperature_dispersion,
-    precipitation_average,
-    precipitation_dispersion,
-    soil_moisture_average,
-    soil_moisture_dispersion,
-):
-    variables = ["T", "P", "H"]
-    # Create figure and axes
-    fig, gp = plt.subplots()
-    x = range(len(variables))
-"""
+def compute_variable_mean_and_std(data: pd.DataFrame):
+    calculated_ts = data[["city", "time"]].copy()
+
+    # Compute the mean and std of each day for each model
+    for variable in VARIABLES.split(","):
+        idxs = [col for col in data.columns if col.startswith(variable)]
+        calculated_ts[f"{variable}_mean"] = data[idxs].mean(axis=1)
+        calculated_ts[f"{variable}_std"] = data[idxs].std(axis=1)
+
+    return calculated_ts
+
+#Function of the code solution
+def plot_timeseries(data: pd.DataFrame):
+    rows = 3
+    cols = 1
+    fig, axs = plt.subplots(rows, cols, figsize=(15, 10))
+    axs = axs.flatten()
+
+    data["year"] = pd.to_datetime(data["time"]).dt.year
+    for k, city in enumerate(data.city.unique()):
+        city_data = data.loc[data.city == city].copy()  # Create a copy of city_data
+        print(city_data.head())
+        for i, variable in enumerate(VARIABLES.split(",")):
+            city_data[f"mid_"] = city_data[f"{variable}_mean"]
+            city_data[f"upper_"] = (
+                city_data[f"{variable}_mean"] + city_data[f"{variable}_std"]
+            )
+            city_data[f"lower_"] = (
+                city_data[f"{variable}_mean"] - city_data[f"{variable}_std"]
+            )
+
+            # Plot yearly mean values
+            city_data.groupby("year")["mid_"].apply("mean").plot(
+                ax=axs[i], label=f"{city}", color=f"C{k}"
+            )
+            city_data.groupby("year")["upper_"].apply("mean").plot(
+                ax=axs[i], ls="--", label="_nolegend_", color=f"C{k}"
+            )
+            city_data.groupby("year")["lower_"].apply("mean").plot(
+                ax=axs[i], ls="--", label="_nolegend_", color=f"C{k}"
+            )
+            axs[i].set_title(variable)
+
+    plt.tight_layout()
+    plt.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.1),
+        fancybox=True,
+        shadow=True,
+        ncol=5,
+    )
+
+    plt.savefig("PLOTS.png")
+
 
 def main():
-    start_date = "1951-01-01"
-    end_date = "1951-12-31"
-    # models = "CMCC_CM2_VHR4"
-
-    # Go through each city in the COORDINATES list and call the function to take each data.
-    for city in COORDINATES.keys():
-        city_data = get_data_meteo_api(city, start_date, end_date)
-        print(city_data.keys())
-        daily_data = city_data["daily"]
-        print(f"Datos para la ciudad de {city}:")
-        print(daily_data)
-        # print(city_data)
-       # print("Dates of: " + city + " " + str(city_data))
-
-        # I have errors in this part of the code because I can´t axcess to this variables (KeyError: 'temperature_2m_mean')
-        #I need to check later the next code lines, It is commented because of that. I am checking some things
-        """
-        temperature_average = compute_average(temperature_data)
-        temperature_dispersion = compute_dispersion(precipitation_data)
-
-        precipitation_average = compute_average(precipitation_data)
-        precipitation_dispersion = compute_dispersion(precipitation_data)
-
-        soil_moisture_average = compute_average(soil_moisture_data)
-        soil_moisture_dispersion = compute_dispersion(soil_moisture_data)
-
-        print(
-            "Dates of:"
-            + city
-            + "\nTemperature - average: "
-            + temperature_average
-            + "- Dispersión: "
-            + temperature_dispersion
+    # Assign the items in the list
+    data_list = []
+    for city, coordinates in COORDINATES.items():
+        data_list.append(
+            (pd.DataFrame(get_data_meteo_api(coordinates)["daily"]).assign(city=city))
         )
-        print(
-            "Precipitation - average:"
-            + precipitation_average
-            + "- Dispersión: "
-            + precipitation_dispersion
-        )
-        print(
-            "Soil moisture - average: "
-            + soil_moisture_average
-            + "- Dispersión: "
-            + soil_moisture_dispersion
-        )
-        print("\n")
-    # plot_results(city, temperature_average, temperature_dispersion, precipitation_average, precipitation_dispersion, soil_moisture_average, soil_moisture_dispersion)
-"""
+
+    data = pd.concat(data_list)
+    print(data.head())
+
+    calculated_ts = compute_variable_mean_and_std(data)
+    print(calculated_ts.head())
+    plot_timeseries(calculated_ts)
+
 
 if __name__ == "__main__":
     main()
